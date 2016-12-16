@@ -46,7 +46,7 @@ server {
 
   location /healthcheck {
     {{range services}} {{$name := .Name}} {{$service := service .Name}}
-    add_header x-service-{{$name}} {{range $service}}{{.Address}}:{{.Port}} {{end}};
+    add_header x-service-{{$name}} "{{range $service}}{{.Address}}:{{.Port}} {{end}}";
     {{end}}
     return 200;
   }

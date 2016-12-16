@@ -1,0 +1,44 @@
+worker_processes  1;  ## Default: 1
+worker_rlimit_nofile 8192;
+user  nginx;
+daemon off;
+
+events {
+  worker_connections  4096;  ## Default: 1024
+}
+
+http {
+
+access_log /dev/null;
+
+{{range services}} {{$name := .Name}} {{$service := service .Name}}
+upstream api-upstream-{{$name}} {
+  zone upstream-{{$name}} 64k;
+  least_conn;
+  {{range $service}}server {{.Address}}:{{.Port}} max_fails=3 fail_timeout=60 weight=1;
+  {{else}}server 127.0.0.1:65535; # force a 502{{end}}
+}
+{{end}}
+
+server {
+  listen 80;
+{{range services}} {{$name := .Name}} {{$service := service .Name}}
+  location /service/{{$name}}/ {
+    proxy_pass http://api-upstream-{{$name}}/;
+    add_header  X-Upstream  $upstream_addr;
+  }
+{{end -}}
+
+  location /healthcheck {
+    {{range services}} {{$name := .Name}} {{$service := service .Name}}
+    add_header x-service-{{$name}} {{range $service}}{{.Address}}:{{.Port}} {{end}};
+    {{end}}
+    return 200;
+  }
+
+  location / {
+    return 404;
+  }
+}
+
+}

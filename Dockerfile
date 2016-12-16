@@ -1,4 +1,4 @@
-FROM nginx:1.10-alpine
+FROM hdsydsvenskan/luanginx:1.10-alpine
 
 ENV CONSUL_TEMPLATE_VERSION 0.16.0
 
@@ -14,5 +14,6 @@ ENV CONSUL "172.17.0.1:8500"
 
 COPY nginx.conf.ctmpl /etc/nginx/nginx.conf.ctmpl
 COPY run.sh /run.sh
+COPY prometheus.lua /nginx-prometheus/prometheus.lua
 
 CMD ["/run.sh"]

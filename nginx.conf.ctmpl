@@ -9,6 +9,16 @@ events {
 
 http {
 
+lua_shared_dict prometheus_metrics 10M;
+lua_package_path "/nginx-prometheus/?.lua";
+init_by_lua '
+  prometheus = require("prometheus").init("prometheus_metrics")
+  metric_requests = prometheus:counter(
+    "apiproxy_http_requests_total", "Number of HTTP requests", {"service", "status"})
+  metric_latency = prometheus:histogram(
+    "apiproxy_http_request_duration_seconds", "HTTP request latency", {"service"})
+';
+
 access_log /dev/null;
 
 {{range services}} {{$name := .Name}} {{$service := service .Name}}
@@ -26,6 +36,11 @@ server {
   location /service/{{$name}}/ {
     proxy_pass http://api-upstream-{{$name}}/;
     add_header  X-Upstream  $upstream_addr;
+
+    log_by_lua '
+  metric_requests:inc(1, {"{{$name}}", ngx.var.status})
+  metric_latency:observe(ngx.now() - ngx.req.start_time(), {"{{$name}}"})
+';
   }
 {{end -}}
 
@@ -34,6 +49,10 @@ server {
     add_header x-service-{{$name}} {{range $service}}{{.Address}}:{{.Port}} {{end}};
     {{end}}
     return 200;
+  }
+
+  location /metrics {
+    content_by_lua 'prometheus:collect()';
   }
 
   location / {

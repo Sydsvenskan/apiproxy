@@ -32,6 +32,9 @@ upstream api-upstream-{{$name}} {
 
 server {
   listen 80;
+
+  client_max_body_size 50M;
+
 {{range services}} {{$name := .Name}} {{$service := service .Name}}
   location /service/{{$name}}/ {
     proxy_pass http://api-upstream-{{$name}}/;

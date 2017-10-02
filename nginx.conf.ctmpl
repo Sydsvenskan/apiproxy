@@ -25,6 +25,7 @@ access_log /dev/null;
 upstream api-upstream-{{$name}} {
   zone upstream-{{$name}} 64k;
   least_conn;
+  keepalive 4;
   {{range $service}}server {{.Address}}:{{.Port}} max_fails=3 fail_timeout=60 weight=1;
   {{else}}server 127.0.0.1:65535; # force a 502{{end}}
 }
@@ -39,6 +40,8 @@ server {
   location /service/{{$name}}/ {
     proxy_pass http://api-upstream-{{$name}}/;
     add_header  X-Upstream  $upstream_addr;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
 
     log_by_lua '
   metric_requests:inc(1, {"{{$name}}", ngx.var.status})

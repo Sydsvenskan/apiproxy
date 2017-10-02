@@ -19,6 +19,8 @@ init_by_lua '
     "apiproxy_http_request_duration_seconds", "HTTP request latency", {"service"})
 ';
 
+keepalive_requests 100000;
+
 access_log /dev/null;
 
 {{range services}} {{$name := .Name}} {{$service := service .Name}}

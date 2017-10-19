@@ -67,7 +67,6 @@ jobs:
     serial: true
     plan:
       - get: sources
-        resource: release-sources
         trigger: true
       - try:
           put: slack-alert
@@ -96,13 +95,11 @@ jobs:
             service: sources/service.yaml
   - name: release
     serial: true
-    trigger: false
     plan:
       - aggregate:
           - get: prod-task
             passed: [production-build]
           - get: sources
-            resource: release-sources
             passed: [production-build]
       - put: prod-service
         params:
@@ -134,12 +131,6 @@ resources:
     source:
       uri: {{repository}}
       branch: {{branch}}
-      private_key: {{github_deploy_key}}
-  - name: release-sources
-    type: git
-    source:
-      uri: {{repository}}
-      branch: release
       private_key: {{github_deploy_key}}
   - name: test-task
     type: ecs-task

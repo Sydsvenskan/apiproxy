@@ -1,0 +1,22 @@
+service.v1:
+  name: apiproxy
+  cpu: 6
+  memory_limits:
+    hard: 64
+    soft: 16
+  ports:
+    - port: 80
+      load_balancer: api
+      load_balancer_path: /service/apiproxy
+      ignore: false
+      tags:
+        - proxy
+      healthcheck:
+        path: /healthcheck
+        interval: 15s
+        timeout: 3s
+  environment:
+    - s3: consul.yaml
+    - set:
+        PORT: 80
+

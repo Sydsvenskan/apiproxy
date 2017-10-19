@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -e -x
+
+git clone ./sources ./compiled
+git --git-dir ./compiled/.git log -1 \
+    --pretty=format:${TAG_PREFIX}-%h > ./compiled/image_version

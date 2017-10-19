@@ -1,0 +1,21 @@
+---
+platform: linux
+
+image_resource:
+  type: docker-image
+  source:
+    repository: golang
+    tag: "1.7"
+
+params:
+  CGO_ENABLED: "0"
+  PACKAGE: ""
+
+inputs:
+  - name: sources
+
+outputs:
+  - name: compiled
+
+run:
+  path: sources/ci/build

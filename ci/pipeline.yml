@@ -1,0 +1,212 @@
+jobs:
+  - name: test-build
+    serial: true
+    plan:
+      - get: sources
+        trigger: true
+      - try:
+          put: slack-alert
+          params:
+            channel: "#commits"
+            username: Concourse
+            text: |
+              Starting $BUILD_PIPELINE_NAME $BUILD_JOB_NAME
+            icon_url: "https://raw.githubusercontent.com/concourse/atc/master/web/public/images/favicon-started.png"
+      - do:
+        - task: build
+          file: sources/ci/build.yml
+          attempts: 2
+          params:
+            TAG_PREFIX: test
+            PACKAGE: {{package}}
+        - put: image
+          attempts: 2
+          params:
+            build: compiled
+            tag: compiled/image_version
+        - put: test-task
+          params:
+            image: {{docker_image}}
+            tag: compiled/image_version
+            service: sources/service.yaml
+
+  - name: test-deploy
+    serial: true
+    plan:
+      - aggregate:
+          - get: test-task
+            trigger: true
+            passed: [test-build]
+          - get: sources
+            passed: [test-build]
+      - put: test-service
+        params:
+          task_arn: test-task/arn
+          service: sources/service.yaml
+        on_success:
+          try:
+            put: slack-alert
+            params:
+              channel: "#commits"
+              username: Concourse
+              text_file: installed/image_version
+              text: |
+                Deployed $BUILD_PIPELINE_NAME $BUILD_JOB_NAME $TEXT_FILE_CONTENT
+              icon_url: "https://raw.githubusercontent.com/concourse/atc/master/web/public/images/favicon-succeeded.png"
+        on_failure:
+          try:
+            put: slack-alert
+            params:
+              channel: "#commits"
+              username: Concourse
+              text: |
+                $BUILD_PIPELINE_NAME $BUILD_JOB_NAME failed
+              icon_url: "https://raw.githubusercontent.com/concourse/atc/master/web/public/images/favicon-errored.png"
+
+  - name: production-build
+    serial: true
+    plan:
+      - get: sources
+        resource: release-sources
+        trigger: true
+      - try:
+          put: slack-alert
+          params:
+            channel: "#commits"
+            username: Concourse
+            text: |
+              Starting $BUILD_PIPELINE_NAME $BUILD_JOB_NAME
+            icon_url: "https://raw.githubusercontent.com/concourse/atc/master/web/public/images/favicon-started.png"
+      - do:
+        - task: build
+          file: sources/ci/build.yml
+          attempts: 2
+          params:
+            TAG_PREFIX: release
+            PACKAGE: {{package}}
+        - put: image
+          attempts: 2
+          params:
+            build: compiled
+            tag: compiled/image_version
+        - put: prod-task
+          params:
+            image: {{docker_image}}
+            tag: compiled/image_version
+            service: sources/service.yaml
+  - name: release
+    serial: true
+    trigger: false
+    plan:
+      - aggregate:
+          - get: prod-task
+            passed: [production-build]
+          - get: sources
+            resource: release-sources
+            passed: [production-build]
+      - put: prod-service
+        params:
+          task_arn: prod-task/arn
+          service: sources/service.yaml
+        on_success:
+          try:
+            put: slack-alert
+            params:
+              channel: "#commits"
+              username: Concourse
+              text_file: installed/image_version
+              text: |
+                Deployed $BUILD_PIPELINE_NAME $BUILD_JOB_NAME $TEXT_FILE_CONTENT
+              icon_url: "https://raw.githubusercontent.com/concourse/atc/master/web/public/images/favicon-succeeded.png"
+        on_failure:
+          try:
+            put: slack-alert
+            params:
+              channel: "#commits"
+              username: Concourse
+              text: |
+                $BUILD_PIPELINE_NAME $BUILD_JOB_NAME failed
+              icon_url: "https://raw.githubusercontent.com/concourse/atc/master/web/public/images/favicon-errored.png"
+
+resources:
+  - name: sources
+    type: git
+    source:
+      uri: {{repository}}
+      branch: {{branch}}
+      private_key: {{github_deploy_key}}
+  - name: release-sources
+    type: git
+    source:
+      uri: {{repository}}
+      branch: release
+      private_key: {{github_deploy_key}}
+  - name: test-task
+    type: ecs-task
+    source:
+      cluster: testing
+      access_key_id: {{aws_id}}
+      secret_access_key: {{aws_secret}}
+      config_bucket: hds-ecs-config
+      region_name: eu-west-1
+      task: {{ecs_test_task}}
+      service: {{ecs_service}}
+  - name: test-service
+    type: ecs-service
+    source:
+      cluster: testing
+      access_key_id: {{aws_id}}
+      secret_access_key: {{aws_secret}}
+      config_bucket: hds-ecs-config
+      load_balancer_suffix: -test
+      region_name: eu-west-1
+      task: {{ecs_test_task}}
+      service: {{ecs_service}}
+  - name: prod-task
+    type: ecs-task
+    source:
+      cluster: production
+      access_key_id: {{aws_id}}
+      secret_access_key: {{aws_secret}}
+      config_bucket: hds-ecs-config
+      region_name: eu-west-1
+      task: {{ecs_prod_task}}
+      service: {{ecs_service}}
+  - name: prod-service
+    type: ecs-service
+    source:
+      cluster: production
+      access_key_id: {{aws_id}}
+      secret_access_key: {{aws_secret}}
+      config_bucket: hds-ecs-config
+      load_balancer_suffix: -prod
+      region_name: eu-west-1
+      task: {{ecs_prod_task}}
+      service: {{ecs_service}}
+  - name: image
+    type: docker-image
+    source:
+      aws_access_key_id: ((aws_id))
+      aws_secret_access_key: ((aws_secret))
+      repository: {{docker_image}}
+  - name: slack-alert
+    type: slack-notification
+    source:
+      url: {{slack_webhook}}
+
+resource_types:
+  - name: slack-notification
+    type: docker-image
+    source:
+      repository: cfcommunity/slack-notification-resource
+      tag: latest
+  - name: ecs-task
+    type: docker-image
+    source:
+      repository: hdsydsvenskan/grot
+      tag: task-1
+  - name: ecs-service
+    type: docker-image
+    source:
+      repository: hdsydsvenskan/grot
+      tag: service-1

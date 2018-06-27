@@ -6,4 +6,4 @@ exec /usr/local/bin/consul-template \
      -template "/etc/nginx/nginx.conf.ctmpl:/etc/nginx/nginx.conf" \
      -exec "nginx -c /etc/nginx/nginx.conf" \
      -exec-reload-signal SIGHUP \
-     -consul ${CONSUL}
+     -consul-addr ${CONSUL}

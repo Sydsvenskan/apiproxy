@@ -34,7 +34,7 @@ upstream api-upstream-{{$name}} {
 {{end}}
 
 server {
-  listen 80;
+  listen 1080;
 
   client_max_body_size 50M;
 
